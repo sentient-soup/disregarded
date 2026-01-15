@@ -35,7 +35,7 @@ A terminal-style essay writing and publishing app with a minimalist, keyboard-dr
 bun install
 
 # Start development server (requires JWT_SECRET)
-JWT_SECRET=dev-secret bun dev
+JWT_SECRET=dev-secret
 
 # Open http://localhost:3000
 ```
