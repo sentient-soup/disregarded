@@ -99,6 +99,20 @@ docker run -d \
   disregarded
 ```
 
+### Deployment 
+
+To deploy the image to ghcr (github container repo).
+```sh
+# Login - where CR_PAT is a token with package permissions
+echo $CR_PAT | sudo docker login ghcr.io -u sentient-soup --password-stdin
+
+# Build with the repo tag
+sudo docker build -t ghcr.io/sentient-soup/disregarded:latest .
+
+# Push to the repo
+sudo docker push ghcr.io/sentient-soup/disregarded:latest
+```
+
 ### Docker Compose
 
 ```bash
