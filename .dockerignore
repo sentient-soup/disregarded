@@ -1,0 +1,38 @@
+# Dependencies
+node_modules
+
+# Database files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/
+
+# Git
+.git
+.gitignore
+
+# Development files
+*.md
+.env
+.env.*
+*.log
+
+# Build artifacts
+dist/
+build/
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
