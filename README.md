@@ -37,6 +37,8 @@ bun install
 # Start development server (requires JWT_SECRET)
 JWT_SECRET=dev-secret
 
+bun dev
+
 # Open http://localhost:3000
 ```
 
