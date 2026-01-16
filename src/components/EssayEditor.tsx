@@ -375,7 +375,26 @@ export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startIn
                 completionKeymap: false,
                 lintKeymap: false,
               }}
-              placeholder={readOnly ? "" : "Start writing..."}
+              placeholder={readOnly ? "" : `# Heading
+
+Write your essay here. Markdown is supported:
+
+**bold** and *italic* text
+- bullet points
+1. numbered lists
+
+> blockquotes for emphasis
+
+> [!NOTE]
+> Alerts: NOTE, TIP, IMPORTANT, WARNING, CAUTION
+
+\`inline code\` or code blocks:
+
+\`\`\`
+code block
+\`\`\`
+
+[links](https://example.com) and ![images](url)`}
             />
           </div>
         )}
