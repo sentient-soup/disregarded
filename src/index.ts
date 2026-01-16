@@ -1,6 +1,10 @@
 import { serve } from "bun";
-import index from "./index.html";
 import { register, login } from "./api/auth";
+
+// In production, serve pre-built files from dist/
+// In development, use runtime bundling
+const isProduction = process.env.NODE_ENV === "production";
+const index = isProduction ? null : (await import("./index.html")).default;
 import {
   getPublishedEssays,
   getUserEssays,
@@ -43,16 +47,29 @@ function matchRoute(pathname: string, pattern: string): Record<string, string> |
 
 const server = serve({
   port: PORT,
-  
-  // Use routes for static/HTML serving with HMR
-  routes: {
+
+  // Use routes for static/HTML serving with HMR (dev mode only)
+  routes: isProduction ? {} : {
     "/": index,
   },
 
-  // Use fetch for API routing
+  // Use fetch for API routing and static file serving
   async fetch(req) {
     const url = new URL(req.url);
     const { pathname } = url;
+
+    // In production, serve static files from dist/
+    if (isProduction) {
+      // Serve static assets (JS, CSS, maps, etc.)
+      if (pathname.match(/\.(js|css|map|ico|svg|png|jpg|jpeg|gif|woff|woff2|ttf|eot)$/)) {
+        const filePath = `dist${pathname}`;
+        const file = Bun.file(filePath);
+        if (await file.exists()) {
+          return new Response(file);
+        }
+      }
+    }
+
     const method = req.method;
 
     // Serve dictionary files for spell checking
@@ -124,8 +141,14 @@ const server = serve({
     }
 
     // For SPA routing - serve index.html for all non-API routes
-    // This enables client-side routing
-    return new Response(Bun.file("src/index.html"));
+    if (isProduction) {
+      // Production: serve pre-built HTML
+      return new Response(Bun.file("dist/index.html"));
+    } else {
+      // Development: use the bundled index from routes
+      // The 'index' import is already a bundled response handler
+      return index;
+    }
   },
 
   development: process.env.NODE_ENV !== "production" && {

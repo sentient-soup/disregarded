@@ -1,18 +1,28 @@
-# Build stage - install dependencies
-FROM oven/bun:1-alpine AS deps
+# Build stage - build frontend assets
+FROM oven/bun:1-alpine AS builder
 WORKDIR /app
 
+# Install ALL dependencies (including devDependencies for build)
 COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile --production
+RUN bun install --frozen-lockfile
+
+# Copy source and build
+COPY src ./src
+COPY build.ts ./
+RUN bun run build
 
 # Production stage
 FROM oven/bun:1-alpine AS runner
 WORKDIR /app
 
-# Copy dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
+# Install production dependencies only
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile --production
 
-# Copy application source
+# Copy built assets from builder
+COPY --from=builder /app/dist ./dist
+
+# Copy server source (still needed for API routes)
 COPY src ./src
 COPY package.json ./
 
