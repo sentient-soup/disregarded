@@ -52,6 +52,7 @@ export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startIn
   
   const editorRef = useRef<ReactCodeMirrorRef>(null);
   const promptInputRef = useRef<HTMLInputElement>(null);
+  const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isNew = !essay?.id;
 
   // Focus management
@@ -63,26 +64,48 @@ export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startIn
     }
   }, [prompt, readOnly, showPreview]);
 
-  // Show initial help message
-  useEffect(() => {
+  // Generate context-aware status message
+  const getDefaultStatusMessage = useCallback(() => {
     if (readOnly) {
-      setStatusMessage("Ctrl+D define | Ctrl+P preview | Ctrl+Q close");
+      const previewHint = showPreview ? "Ctrl+P source" : "Ctrl+P preview";
+      return `Ctrl+D define | ${previewHint} | Esc close`;
     } else {
-      setStatusMessage("Ctrl+S save | Ctrl+E title | Ctrl+Enter publish | Ctrl+Q close");
+      const publishHint = isNew ? "" : (currentStatus === "published" ? " | Ctrl+Enter unpublish" : " | Ctrl+Enter publish");
+      const previewHint = showPreview ? "Ctrl+P edit" : "Ctrl+P preview";
+      return `Ctrl+S save | Ctrl+E title | ${previewHint}${publishHint} | Esc close`;
     }
-  }, [readOnly]);
+  }, [readOnly, isNew, currentStatus, showPreview]);
+
+  // Keep a ref to always have access to the latest getDefaultStatusMessage
+  const getDefaultStatusMessageRef = useRef(getDefaultStatusMessage);
+  useEffect(() => {
+    getDefaultStatusMessageRef.current = getDefaultStatusMessage;
+  }, [getDefaultStatusMessage]);
+
+  // Show initial help message and update when state changes (only if no temp message showing)
+  useEffect(() => {
+    if (!statusTimeoutRef.current) {
+      setStatusMessage(getDefaultStatusMessage());
+    }
+  }, [getDefaultStatusMessage]);
 
   const showStatus = useCallback((msg: string, duration = 3000) => {
+    // Clear any existing timeout
+    if (statusTimeoutRef.current) {
+      clearTimeout(statusTimeoutRef.current);
+      statusTimeoutRef.current = null;
+    }
+
     setStatusMessage(msg);
+
     if (duration > 0) {
-      setTimeout(() => {
-        setStatusMessage(readOnly
-          ? "Ctrl+D define | Ctrl+P preview | Ctrl+Q close"
-          : "Ctrl+S save | Ctrl+E title | Ctrl+Enter publish | Ctrl+Q close"
-        );
+      statusTimeoutRef.current = setTimeout(() => {
+        statusTimeoutRef.current = null;
+        // Use ref to get the LATEST default message
+        setStatusMessage(getDefaultStatusMessageRef.current());
       }, duration);
     }
-  }, [readOnly]);
+  }, []);
 
   const handleSave = useCallback(async () => {
     if (readOnly || isSaving) return;
@@ -252,10 +275,6 @@ export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startIn
           case "s":
             e.preventDefault();
             if (!readOnly) handleSave();
-            break;
-          case "q":
-            e.preventDefault();
-            onClose();
             break;
           case "p":
             e.preventDefault();
