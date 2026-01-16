@@ -43,6 +43,7 @@ marked.use(markedAlert());
 export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startInPreview = false }: EssayEditorProps) {
   const [title, setTitle] = useState(essay?.title || "Untitled");
   const [content, setContent] = useState(essay?.content || "");
+  const [currentStatus, setCurrentStatus] = useState<"draft" | "published">(essay?.status || "draft");
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [showPreview, setShowPreview] = useState(startInPreview);
@@ -67,7 +68,7 @@ export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startIn
     if (readOnly) {
       setStatusMessage("Ctrl+D define | Ctrl+P preview | Ctrl+Q close");
     } else {
-      setStatusMessage("Ctrl+S save | Ctrl+T title | Ctrl+D define | Ctrl+Q close");
+      setStatusMessage("Ctrl+S save | Ctrl+E title | Ctrl+Enter publish | Ctrl+Q close");
     }
   }, [readOnly]);
 
@@ -75,9 +76,9 @@ export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startIn
     setStatusMessage(msg);
     if (duration > 0) {
       setTimeout(() => {
-        setStatusMessage(readOnly 
+        setStatusMessage(readOnly
           ? "Ctrl+D define | Ctrl+P preview | Ctrl+Q close"
-          : "Ctrl+S save | Ctrl+T title | Ctrl+D define | Ctrl+Q close"
+          : "Ctrl+S save | Ctrl+E title | Ctrl+Enter publish | Ctrl+Q close"
         );
       }, duration);
     }
@@ -86,7 +87,7 @@ export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startIn
   const handleSave = useCallback(async () => {
     if (readOnly || isSaving) return;
     if (!title.trim() || title === "Untitled") {
-      showStatus("Error: Please set a title first (Ctrl+T)", 3000);
+      showStatus("Error: Please set a title first (Ctrl+E)", 3000);
       return;
     }
 
@@ -127,7 +128,7 @@ export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startIn
 
     setIsSaving(true);
     showStatus("Publishing...", 0);
-    
+
     try {
       const res = await authFetch(`/api/essays/${essay!.id}/publish`, { method: "PUT" });
       const data = await res.json();
@@ -137,15 +138,48 @@ export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startIn
         return;
       }
 
+      setCurrentStatus("published");
       showStatus("Published!", 2000);
       onSaved("Essay published!");
-      onClose();
     } catch {
       showStatus("Error: Network error", 3000);
     } finally {
       setIsSaving(false);
     }
-  }, [readOnly, isNew, isSaving, essay, onSaved, onClose, showStatus]);
+  }, [readOnly, isNew, isSaving, essay, onSaved, showStatus]);
+
+  const handleUnpublish = useCallback(async () => {
+    if (readOnly || isNew || isSaving) return;
+
+    setIsSaving(true);
+    showStatus("Unpublishing...", 0);
+
+    try {
+      const res = await authFetch(`/api/essays/${essay!.id}/unpublish`, { method: "PUT" });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showStatus(`Error: ${data.error || "Failed to unpublish"}`, 3000);
+        return;
+      }
+
+      setCurrentStatus("draft");
+      showStatus("Unpublished (now draft)", 2000);
+      onSaved("Essay unpublished");
+    } catch {
+      showStatus("Error: Network error", 3000);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [readOnly, isNew, isSaving, essay, onSaved, showStatus]);
+
+  const handleTogglePublish = useCallback(() => {
+    if (currentStatus === "published") {
+      handleUnpublish();
+    } else {
+      handlePublish();
+    }
+  }, [currentStatus, handlePublish, handleUnpublish]);
 
   const openTitlePrompt = useCallback(() => {
     setPrompt({
@@ -230,13 +264,13 @@ export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startIn
               return !prev;
             });
             break;
-          case "t":
+          case "e":
             e.preventDefault();
             if (!readOnly) openTitlePrompt();
             break;
           case "enter":
             e.preventDefault();
-            if (!readOnly && !isNew) handlePublish();
+            if (!readOnly && !isNew) handleTogglePublish();
             break;
           case "d":
             e.preventDefault();
@@ -255,7 +289,7 @@ export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startIn
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [prompt, readOnly, isNew, handleSave, handlePublish, onClose, openTitlePrompt, showStatus, handleDictionaryLookup]);
+  }, [prompt, readOnly, isNew, handleSave, handleTogglePublish, onClose, openTitlePrompt, showStatus, handleDictionaryLookup]);
 
   // Calculate line count
   const lineCount = content.split("\n").length;
@@ -348,9 +382,9 @@ export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startIn
           <div className="editor-status-line">
             <div className="editor-status-left">
               <span className="editor-title-display">{title}</span>
-              {essay?.status && (
-                <span className={`editor-status-badge ${essay.status === "published" ? "published" : "draft"}`}>
-                  [{essay.status}]
+              {!isNew && (
+                <span className={`editor-status-badge ${currentStatus === "published" ? "published" : "draft"}`}>
+                  [{currentStatus}]
                 </span>
               )}
               {readOnly && <span className="editor-mode-indicator">[VIEW]</span>}
