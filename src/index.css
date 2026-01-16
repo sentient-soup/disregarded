@@ -110,6 +110,21 @@
     white-space: pre;
   }
 
+  /* Scale down logo on small screens to prevent cutoff */
+  @media (max-width: 480px) {
+    .logo-container {
+      transform: scale(0.6);
+      transform-origin: center;
+    }
+  }
+
+  @media (min-width: 481px) and (max-width: 639px) {
+    .logo-container {
+      transform: scale(0.8);
+      transform-origin: center;
+    }
+  }
+
   @media (min-width: 640px) {
     .logo-text {
       font-size: 1.25rem;
@@ -433,6 +448,64 @@
     @apply flex items-center justify-between px-4 py-1 text-sm;
     background: var(--color-bg1);
     color: var(--color-grey0);
+  }
+
+  /* Touch action bar - only shown on touch devices */
+  .editor-touch-actions {
+    display: none;
+  }
+
+  @media (pointer: coarse) {
+    .editor-status-message {
+      display: none;
+    }
+
+    .editor-touch-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .editor-touch-btn {
+      background: var(--color-bg2);
+      color: var(--color-fg);
+      border: none;
+      border-radius: 4px;
+      padding: 0.375rem 0.75rem;
+      font-family: inherit;
+      font-size: 0.75rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .editor-touch-btn:hover,
+    .editor-touch-btn:active {
+      background: var(--color-bg3);
+    }
+
+    .editor-touch-btn.primary {
+      background: var(--color-bg-blue);
+      color: var(--color-blue);
+    }
+
+    .editor-touch-btn.primary:hover,
+    .editor-touch-btn.primary:active {
+      background: var(--color-blue);
+      color: var(--color-bg0);
+    }
+
+    .editor-touch-btn.success {
+      color: var(--color-green);
+    }
+
+    .editor-touch-btn.warning {
+      color: var(--color-yellow);
+    }
+
+    .editor-touch-btn.danger {
+      color: var(--color-red);
+    }
   }
 
   /* Markdown preview styles */

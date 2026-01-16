@@ -410,6 +410,47 @@ export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startIn
             </div>
             <div className="editor-status-right">
               <span className="editor-status-message">{statusMessage}</span>
+              {/* Touch action buttons - shown only on touch devices via CSS */}
+              <div className="editor-touch-actions">
+                {!readOnly && (
+                  <button
+                    className="editor-touch-btn primary"
+                    onClick={handleSave}
+                    disabled={isSaving}
+                  >
+                    save
+                  </button>
+                )}
+                {!readOnly && (
+                  <button
+                    className="editor-touch-btn"
+                    onClick={openTitlePrompt}
+                  >
+                    title
+                  </button>
+                )}
+                <button
+                  className="editor-touch-btn"
+                  onClick={() => setShowPreview(prev => !prev)}
+                >
+                  {showPreview ? "edit" : "preview"}
+                </button>
+                {!readOnly && !isNew && (
+                  <button
+                    className={`editor-touch-btn ${currentStatus === "published" ? "warning" : "success"}`}
+                    onClick={handleTogglePublish}
+                    disabled={isSaving}
+                  >
+                    {currentStatus === "published" ? "unpub" : "pub"}
+                  </button>
+                )}
+                <button
+                  className="editor-touch-btn danger"
+                  onClick={onClose}
+                >
+                  close
+                </button>
+              </div>
             </div>
           </div>
         )}
