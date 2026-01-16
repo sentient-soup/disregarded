@@ -3,7 +3,7 @@ import type { OutputLine } from "../components/TerminalOutput";
 import { authFetch } from "./useAuth";
 
 interface Essay {
-  id: number;
+  id: string;
   title: string;
   content: string;
   status: "draft" | "published";
@@ -25,6 +25,46 @@ interface UseTerminalProps {
 interface InputState {
   mode: "command" | "login_username" | "login_password" | "register_username" | "register_password" | "confirm_delete";
   tempData?: Record<string, string>;
+}
+
+// Fuzzy match scoring: returns a score (higher = better match), or -1 for no match
+function fuzzyMatch(text: string, query: string): number {
+  const lowerText = text.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  
+  // Exact match gets highest score
+  if (lowerText === lowerQuery) return 1000;
+  
+  // Contains exact query
+  if (lowerText.includes(lowerQuery)) {
+    // Earlier position = higher score
+    return 500 - lowerText.indexOf(lowerQuery);
+  }
+  
+  // Fuzzy character sequence match
+  let textIdx = 0;
+  let matched = 0;
+  let consecutive = 0;
+  let maxConsecutive = 0;
+  
+  for (const char of lowerQuery) {
+    const foundIdx = lowerText.indexOf(char, textIdx);
+    if (foundIdx === -1) continue;
+    
+    matched++;
+    if (foundIdx === textIdx) {
+      consecutive++;
+      maxConsecutive = Math.max(maxConsecutive, consecutive);
+    } else {
+      consecutive = 1;
+    }
+    textIdx = foundIdx + 1;
+  }
+  
+  if (matched === 0) return -1;
+  
+  // Score based on: matched chars ratio + consecutive bonus
+  return (matched / lowerQuery.length) * 100 + maxConsecutive * 10;
 }
 
 export function useTerminal({
@@ -76,12 +116,12 @@ export function useTerminal({
             { cmd: "publish <id>", desc: "Publish an essay" },
             { cmd: "unpublish <id>", desc: "Unpublish an essay" },
             { cmd: "delete <id>", desc: "Delete an essay" },
-            { cmd: "browse", desc: "Browse all published essays" },
+            { cmd: "browse [query]", desc: "Browse/search published essays" },
           ]
         : [
             { cmd: "login", desc: "Log in to your account" },
             { cmd: "register", desc: "Create a new account" },
-            { cmd: "browse", desc: "Browse published essays" },
+            { cmd: "browse [query]", desc: "Browse/search published essays" },
             { cmd: "view <id>", desc: "View a published essay" },
           ]),
     ];
@@ -123,7 +163,7 @@ export function useTerminal({
         const statusClass = essay.status === "published" ? "text-success" : "text-warning";
         addLine(
           <span>
-            <span className="text-muted">#{essay.id.toString().padEnd(4)}</span>
+            <span className="text-muted">#{essay.id.padEnd(6)}</span>
             <span className={statusClass}>{status.padEnd(12)}</span>
             <span className="text-accent">{essay.title}</span>
           </span>
@@ -136,7 +176,7 @@ export function useTerminal({
     }
   }, [addLine]);
 
-  const browseEssays = useCallback(async () => {
+  const browseEssays = useCallback(async (query?: string) => {
     setIsProcessing(true);
     try {
       const res = await fetch("/api/essays/public");
@@ -152,11 +192,35 @@ export function useTerminal({
         return;
       }
 
-      addLine("Published essays:", "info");
-      data.essays.forEach((essay: Essay) => {
+      let essays: Essay[] = data.essays;
+      
+      // Apply fuzzy search if query provided
+      if (query && query.trim()) {
+        const scored = essays.map((essay) => {
+          const titleScore = fuzzyMatch(essay.title, query);
+          const authorScore = fuzzyMatch(essay.author || "", query);
+          return { essay, score: Math.max(titleScore, authorScore) };
+        });
+        
+        // Filter to matches only, then sort by score descending
+        const matches = scored.filter((s) => s.score > 0);
+        
+        if (matches.length > 0) {
+          matches.sort((a, b) => b.score - a.score);
+          essays = matches.map((s) => s.essay);
+          addLine(`Search results for "${query}":`, "info");
+        } else {
+          // Fall back to showing all essays
+          addLine(`No matches for "${query}". Showing all published essays:`, "info");
+        }
+      } else {
+        addLine("Published essays:", "info");
+      }
+
+      essays.forEach((essay: Essay) => {
         addLine(
           <span>
-            <span className="text-muted">#{essay.id.toString().padEnd(4)}</span>
+            <span className="text-muted">#{essay.id.padEnd(6)}</span>
             <span className="text-special">{(essay.author || "Unknown").padEnd(16)}</span>
             <span className="text-accent">{essay.title}</span>
           </span>
@@ -169,7 +233,7 @@ export function useTerminal({
     }
   }, [addLine]);
 
-  const viewEssay = useCallback(async (id: number) => {
+  const viewEssay = useCallback(async (id: string) => {
     setIsProcessing(true);
     try {
       const res = await authFetch(`/api/essays/${id}`);
@@ -190,7 +254,7 @@ export function useTerminal({
     }
   }, [addLine, onViewEssay]);
 
-  const editEssay = useCallback(async (id: number) => {
+  const editEssay = useCallback(async (id: string) => {
     if (!isAuthenticated) {
       addLine("Please login first", "error");
       return;
@@ -222,7 +286,7 @@ export function useTerminal({
     onEditEssay(null); // null means new essay
   }, [isAuthenticated, addLine, onEditEssay]);
 
-  const publishEssay = useCallback(async (id: number) => {
+  const publishEssay = useCallback(async (id: string) => {
     setIsProcessing(true);
     try {
       const res = await authFetch(`/api/essays/${id}/publish`, { method: "PUT" });
@@ -241,7 +305,7 @@ export function useTerminal({
     }
   }, [addLine]);
 
-  const unpublishEssay = useCallback(async (id: number) => {
+  const unpublishEssay = useCallback(async (id: string) => {
     setIsProcessing(true);
     try {
       const res = await authFetch(`/api/essays/${id}/unpublish`, { method: "PUT" });
@@ -260,7 +324,7 @@ export function useTerminal({
     }
   }, [addLine]);
 
-  const deleteEssay = useCallback(async (id: number) => {
+  const deleteEssay = useCallback(async (id: string) => {
     setIsProcessing(true);
     try {
       const res = await authFetch(`/api/essays/${id}`, { method: "DELETE" });
@@ -325,7 +389,7 @@ export function useTerminal({
 
         case "confirm_delete":
           if (input.toLowerCase() === "yes" || input.toLowerCase() === "y") {
-            await deleteEssay(parseInt(tempData.id!));
+            await deleteEssay(tempData.id!);
           } else {
             addLine("Delete cancelled", "muted");
           }
@@ -400,19 +464,14 @@ export function useTerminal({
         break;
 
       case "browse":
-        await browseEssays();
+        await browseEssays(args.join(" ") || undefined);
         break;
 
       case "view":
         if (!args[0]) {
           addLine("Usage: view <id>", "warning");
         } else {
-          const id = parseInt(args[0]);
-          if (isNaN(id)) {
-            addLine("Invalid ID", "error");
-          } else {
-            await viewEssay(id);
-          }
+          await viewEssay(args[0]);
         }
         break;
 
@@ -420,12 +479,7 @@ export function useTerminal({
         if (!args[0]) {
           addLine("Usage: edit <id>", "warning");
         } else {
-          const id = parseInt(args[0]);
-          if (isNaN(id)) {
-            addLine("Invalid ID", "error");
-          } else {
-            await editEssay(id);
-          }
+          await editEssay(args[0]);
         }
         break;
 
@@ -435,12 +489,7 @@ export function useTerminal({
         } else if (!args[0]) {
           addLine("Usage: publish <id>", "warning");
         } else {
-          const id = parseInt(args[0]);
-          if (isNaN(id)) {
-            addLine("Invalid ID", "error");
-          } else {
-            await publishEssay(id);
-          }
+          await publishEssay(args[0]);
         }
         break;
 
@@ -450,12 +499,7 @@ export function useTerminal({
         } else if (!args[0]) {
           addLine("Usage: unpublish <id>", "warning");
         } else {
-          const id = parseInt(args[0]);
-          if (isNaN(id)) {
-            addLine("Invalid ID", "error");
-          } else {
-            await unpublishEssay(id);
-          }
+          await unpublishEssay(args[0]);
         }
         break;
 
@@ -465,13 +509,8 @@ export function useTerminal({
         } else if (!args[0]) {
           addLine("Usage: delete <id>", "warning");
         } else {
-          const id = parseInt(args[0]);
-          if (isNaN(id)) {
-            addLine("Invalid ID", "error");
-          } else {
-            addLine(`Are you sure you want to delete essay #${id}? (yes/no)`, "warning");
-            setInputState({ mode: "confirm_delete", tempData: { id: args[0] } });
-          }
+          addLine(`Are you sure you want to delete essay #${args[0]}? (yes/no)`, "warning");
+          setInputState({ mode: "confirm_delete", tempData: { id: args[0] } });
         }
         break;
 

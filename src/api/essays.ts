@@ -1,4 +1,4 @@
-import { essayQueries, userQueries, type Essay } from "../db";
+import { essayQueries, userQueries, generateUniqueShortId, type Essay } from "../db";
 import type { AuthenticatedRequest } from "./middleware";
 
 // Maximum essay content length (default: 500KB)
@@ -18,12 +18,13 @@ interface UpdateEssayRequest {
 export async function getPublishedEssays(_req: Request): Promise<Response> {
   try {
     const essays = essayQueries.findPublished.all();
-    
-    // Add author info to each essay
+
+    // Add author info and use short_id as id
     const essaysWithAuthors = essays.map((essay) => {
       const user = userQueries.findById.get(essay.user_id);
       return {
         ...essay,
+        id: essay.short_id,
         author: user?.username || "Unknown",
       };
     });
@@ -42,7 +43,14 @@ export async function getPublishedEssays(_req: Request): Promise<Response> {
 export async function getUserEssays(req: AuthenticatedRequest): Promise<Response> {
   try {
     const essays = essayQueries.findByUserId.all(req.userId);
-    return Response.json({ essays });
+
+    // Use short_id as id
+    const essaysWithShortId = essays.map((essay) => ({
+      ...essay,
+      id: essay.short_id,
+    }));
+
+    return Response.json({ essays: essaysWithShortId });
   } catch (error) {
     console.error("Get user essays error:", error);
     return Response.json(
@@ -55,12 +63,12 @@ export async function getUserEssays(req: AuthenticatedRequest): Promise<Response
 // Get single essay
 export async function getEssay(req: Request & { params: { id: string }; userId?: number }): Promise<Response> {
   try {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
+    const shortId = req.params.id;
+    if (!shortId || shortId.length === 0) {
       return Response.json({ error: "Invalid essay ID" }, { status: 400 });
     }
 
-    const essay = essayQueries.findById.get(id);
+    const essay = essayQueries.findByShortId.get(shortId);
     if (!essay) {
       return Response.json({ error: "Essay not found" }, { status: 404 });
     }
@@ -75,6 +83,7 @@ export async function getEssay(req: Request & { params: { id: string }; userId?:
     return Response.json({
       essay: {
         ...essay,
+        id: essay.short_id, // Use short_id as the public ID
         author: user?.username || "Unknown",
       },
     });
@@ -114,7 +123,8 @@ export async function createEssay(req: AuthenticatedRequest): Promise<Response> 
       );
     }
 
-    const essay = essayQueries.create.get(req.userId, title.trim(), content);
+    const shortId = generateUniqueShortId();
+    const essay = essayQueries.create.get(shortId, req.userId, title.trim(), content);
     if (!essay) {
       return Response.json(
         { error: "Failed to create essay" },
@@ -124,7 +134,10 @@ export async function createEssay(req: AuthenticatedRequest): Promise<Response> 
 
     return Response.json({
       message: "Essay created",
-      essay,
+      essay: {
+        ...essay,
+        id: essay.short_id, // Use short_id as the public ID
+      },
     }, { status: 201 });
   } catch (error) {
     console.error("Create essay error:", error);
@@ -138,13 +151,13 @@ export async function createEssay(req: AuthenticatedRequest): Promise<Response> 
 // Update essay (authenticated)
 export async function updateEssay(req: AuthenticatedRequest & { params: { id: string } }): Promise<Response> {
   try {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
+    const shortId = req.params.id;
+    if (!shortId || shortId.length === 0) {
       return Response.json({ error: "Invalid essay ID" }, { status: 400 });
     }
 
     // Check ownership
-    const existing = essayQueries.findById.get(id);
+    const existing = essayQueries.findByShortId.get(shortId);
     if (!existing) {
       return Response.json({ error: "Essay not found" }, { status: 404 });
     }
@@ -167,7 +180,7 @@ export async function updateEssay(req: AuthenticatedRequest & { params: { id: st
       );
     }
 
-    const essay = essayQueries.update.get(title, content, id, req.userId);
+    const essay = essayQueries.update.get(title, content, shortId, req.userId);
     if (!essay) {
       return Response.json(
         { error: "Failed to update essay" },
@@ -177,7 +190,10 @@ export async function updateEssay(req: AuthenticatedRequest & { params: { id: st
 
     return Response.json({
       message: "Essay updated",
-      essay,
+      essay: {
+        ...essay,
+        id: essay.short_id,
+      },
     });
   } catch (error) {
     console.error("Update essay error:", error);
@@ -191,13 +207,13 @@ export async function updateEssay(req: AuthenticatedRequest & { params: { id: st
 // Delete essay (authenticated)
 export async function deleteEssay(req: AuthenticatedRequest & { params: { id: string } }): Promise<Response> {
   try {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
+    const shortId = req.params.id;
+    if (!shortId || shortId.length === 0) {
       return Response.json({ error: "Invalid essay ID" }, { status: 400 });
     }
 
     // Check ownership
-    const existing = essayQueries.findById.get(id);
+    const existing = essayQueries.findByShortId.get(shortId);
     if (!existing) {
       return Response.json({ error: "Essay not found" }, { status: 404 });
     }
@@ -205,7 +221,7 @@ export async function deleteEssay(req: AuthenticatedRequest & { params: { id: st
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    essayQueries.delete.run(id, req.userId);
+    essayQueries.delete.run(shortId, req.userId);
 
     return Response.json({ message: "Essay deleted" });
   } catch (error) {
@@ -220,13 +236,13 @@ export async function deleteEssay(req: AuthenticatedRequest & { params: { id: st
 // Publish essay (authenticated)
 export async function publishEssay(req: AuthenticatedRequest & { params: { id: string } }): Promise<Response> {
   try {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
+    const shortId = req.params.id;
+    if (!shortId || shortId.length === 0) {
       return Response.json({ error: "Invalid essay ID" }, { status: 400 });
     }
 
     // Check ownership
-    const existing = essayQueries.findById.get(id);
+    const existing = essayQueries.findByShortId.get(shortId);
     if (!existing) {
       return Response.json({ error: "Essay not found" }, { status: 404 });
     }
@@ -234,7 +250,7 @@ export async function publishEssay(req: AuthenticatedRequest & { params: { id: s
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const essay = essayQueries.updateStatus.get("published", id, req.userId);
+    const essay = essayQueries.updateStatus.get("published", shortId, req.userId);
     if (!essay) {
       return Response.json(
         { error: "Failed to publish essay" },
@@ -244,7 +260,10 @@ export async function publishEssay(req: AuthenticatedRequest & { params: { id: s
 
     return Response.json({
       message: "Essay published",
-      essay,
+      essay: {
+        ...essay,
+        id: essay.short_id,
+      },
     });
   } catch (error) {
     console.error("Publish essay error:", error);
@@ -258,13 +277,13 @@ export async function publishEssay(req: AuthenticatedRequest & { params: { id: s
 // Unpublish essay (authenticated)
 export async function unpublishEssay(req: AuthenticatedRequest & { params: { id: string } }): Promise<Response> {
   try {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
+    const shortId = req.params.id;
+    if (!shortId || shortId.length === 0) {
       return Response.json({ error: "Invalid essay ID" }, { status: 400 });
     }
 
     // Check ownership
-    const existing = essayQueries.findById.get(id);
+    const existing = essayQueries.findByShortId.get(shortId);
     if (!existing) {
       return Response.json({ error: "Essay not found" }, { status: 404 });
     }
@@ -272,7 +291,7 @@ export async function unpublishEssay(req: AuthenticatedRequest & { params: { id:
       return Response.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const essay = essayQueries.updateStatus.get("draft", id, req.userId);
+    const essay = essayQueries.updateStatus.get("draft", shortId, req.userId);
     if (!essay) {
       return Response.json(
         { error: "Failed to unpublish essay" },
@@ -282,7 +301,10 @@ export async function unpublishEssay(req: AuthenticatedRequest & { params: { id:
 
     return Response.json({
       message: "Essay unpublished",
-      essay,
+      essay: {
+        ...essay,
+        id: essay.short_id,
+      },
     });
   } catch (error) {
     console.error("Unpublish essay error:", error);

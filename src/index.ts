@@ -144,11 +144,10 @@ const server = serve({
     if (isProduction) {
       // Production: serve pre-built HTML
       return new Response(Bun.file("dist/index.html"));
-    } else {
-      // Development: use the bundled index from routes
-      // The 'index' import is already a bundled response handler
-      return index;
     }
+    // Development: fetch the bundled HTML from the root route
+    const rootUrl = new URL("/", req.url);
+    return fetch(rootUrl);
   },
 
   development: process.env.NODE_ENV !== "production" && {

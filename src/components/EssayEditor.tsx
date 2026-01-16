@@ -11,7 +11,7 @@ import { spellCheckExtension } from "../lib/spellcheck";
 import { DictionaryPopup } from "./DictionaryPopup";
 
 interface Essay {
-  id?: number;
+  id?: string;
   title: string;
   content: string;
   status?: "draft" | "published";
@@ -66,15 +66,16 @@ export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startIn
 
   // Generate context-aware status message
   const getDefaultStatusMessage = useCallback(() => {
+    const shareHint = essay?.id ? " | Ctrl+L share" : "";
     if (readOnly) {
       const previewHint = showPreview ? "Ctrl+P source" : "Ctrl+P preview";
-      return `Ctrl+D define | ${previewHint} | Esc close`;
+      return `Ctrl+D define | ${previewHint}${shareHint} | Esc close`;
     } else {
       const publishHint = isNew ? "" : (currentStatus === "published" ? " | Ctrl+Enter unpublish" : " | Ctrl+Enter publish");
       const previewHint = showPreview ? "Ctrl+P edit" : "Ctrl+P preview";
-      return `Ctrl+S save | Ctrl+E title | ${previewHint}${publishHint} | Esc close`;
+      return `Ctrl+S save | Ctrl+E title | ${previewHint}${publishHint}${shareHint} | Esc close`;
     }
-  }, [readOnly, isNew, currentStatus, showPreview]);
+  }, [readOnly, isNew, currentStatus, showPreview, essay?.id]);
 
   // Keep a ref to always have access to the latest getDefaultStatusMessage
   const getDefaultStatusMessageRef = useRef(getDefaultStatusMessage);
@@ -221,6 +222,21 @@ export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startIn
     });
   }, [title, showStatus]);
 
+  // Handle Ctrl+L to copy share link
+  const handleShareLink = useCallback(() => {
+    if (!essay?.id) {
+      showStatus("Save essay first to get a shareable link", 2000);
+      return;
+    }
+
+    const url = `${window.location.origin}/${essay.id}`;
+    navigator.clipboard.writeText(url).then(() => {
+      showStatus("Link copied to clipboard!", 2000);
+    }).catch(() => {
+      showStatus("Failed to copy link", 2000);
+    });
+  }, [essay?.id, showStatus]);
+
   // Handle Ctrl+D to show dictionary popup for selected word
   const handleDictionaryLookup = useCallback(() => {
     const view = editorRef.current?.view;
@@ -295,6 +311,10 @@ export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startIn
             e.preventDefault();
             handleDictionaryLookup();
             break;
+          case "l":
+            e.preventDefault();
+            handleShareLink();
+            break;
         }
         return;
       }
@@ -308,7 +328,7 @@ export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startIn
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [prompt, readOnly, isNew, handleSave, handleTogglePublish, onClose, openTitlePrompt, showStatus, handleDictionaryLookup]);
+  }, [prompt, readOnly, isNew, handleSave, handleTogglePublish, onClose, openTitlePrompt, showStatus, handleDictionaryLookup, handleShareLink]);
 
   // Calculate line count
   const lineCount = content.split("\n").length;
@@ -355,6 +375,7 @@ export function EssayEditor({ essay, onClose, onSaved, readOnly = false, startIn
               extensions={extensions}
               theme={everforest}
               editable={!readOnly}
+              autoFocus={!readOnly && !showPreview}
               basicSetup={{
                 lineNumbers: true,
                 highlightActiveLineGutter: true,
