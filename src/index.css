@@ -460,10 +460,30 @@
       display: none;
     }
 
+    /* Mobile editor footer: title on first line, buttons on second */
+    .editor-status-line {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.25rem;
+      padding-top: 0.25rem;
+      padding-bottom: 0.25rem;
+    }
+
+    .editor-status-left {
+      justify-content: center;
+      width: 100%;
+    }
+
+    .editor-status-right {
+      width: 100%;
+    }
+
     .editor-touch-actions {
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 0.25rem;
+      flex-wrap: wrap;
     }
 
     .editor-touch-btn {
